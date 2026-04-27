@@ -1,0 +1,58 @@
+name: Node.js CI/CD
+
+# Controls when the workflow will run
+on:
+  push:
+    branches:
+      - main # Trigger CI for changes to the "main" branch
+  pull_request:
+    branches:
+      - main # Trigger CI for pull requests targeting "main"
+
+# Define jobs for the workflow
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy using SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e  # Stop execution if any command fails
+
+            # Source the NVM to ensure using the right Node.js version if using nvm
+            source ~/.nvm/nvm.sh
+            echo "Node.js version sourced successfully using nvm."
+
+            # Change to the project directory
+            cd ~/hr-lodex
+            echo "Changed directory to ~/hr-lodex"
+
+            # Pull the latest code from the production branch
+            git pull origin main
+            git reset --hard origin/main
+            git clean -fd
+            echo "Git pull from production branch completed successfully."
+
+            # Deploy server
+            cd server/
+            echo "Changed directory to ./server/"
+            npm i
+            echo "Server dependencies installed successfully."
+            pm2 restart  hr-lodex
+            echo "Server restarted successfully using PM2."
+
+            # Deploy client
+            cd ../client/
+            echo "Changed directory to ../client/"
+            npm i
+            echo "Client dependencies installed successfully."
+            npm run build
+            echo "Client built successfully."
+            sudo rsync -av --delete ./dist/ /var/www/hrlodex-frontend/
+            echo "Client files synced successfully to /var/www/hrlodex-frontend/"
